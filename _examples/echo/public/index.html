@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emma - Echo</title>
+</head>
+
+<body style="background-color: #aaa; transition: background-color .7s;">
+    <h1>Emma test</h1>
+    <ul id="list"></ul>
+    <form id="form">
+        <input id="text" type="text">
+        <button type="submit">Send</button>
+    </form>
+    <script>
+        const ws = new WebSocket('ws://localhost:8000/ws');
+        ws.addEventListener('open', () => {
+            console.log('connected!');
+            document.body.style.backgroundColor = "#fff";
+        });
+
+        ws.addEventListener('message', e => {
+            const message = JSON.parse(e.data);
+            const list = document.getElementById('list');
+            const li = document.createElement('li');
+            li.innerText = message.text;
+            list.appendChild(li);
+        });
+
+        const form = document.getElementById('form');
+        form.addEventListener('submit', e => {
+            e.preventDefault();
+            const text = document.getElementById('text');
+            const message = {
+                text: text.value
+            };
+
+            ws.send(JSON.stringify(message));
+            text.value = '';
+        });
+
+    </script>
+</body>
+
+</html>
