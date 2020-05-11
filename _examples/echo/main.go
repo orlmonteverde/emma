@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/gorilla/websocket"
@@ -44,5 +45,5 @@ func main() {
 
 	go e.Run()
 
-	http.ListenAndServe(":8000", mux)
+	log.Fatal(http.ListenAndServe(":8000", mux))
 }

@@ -23,9 +23,16 @@ func (c *Client) Send(msg []byte) {
 	c.send <- msg
 }
 
-// Broadcast send message to all clients.
+// Broadcast transmits a message to all clients except the sender.
 func (c *Client) Broadcast(msg []byte) {
 	c.Emma.BroadcastFilter(msg, func(client *Client) bool {
+		return client != c
+	})
+}
+
+// BroadcastJSON transmits a message in JSON format to all clients except the sender.
+func (c *Client) BroadcastJSON(i interface{}) {
+	c.Emma.BroadcastFilterJSON(i, func(client *Client) bool {
 		return client != c
 	})
 }
