@@ -2,7 +2,7 @@ package emma
 
 import "encoding/json"
 
-// Emma to notifications.
+// Emma allows you to manage clients connected to the WebSocket.
 type Emma struct {
 	// join is a channel for clients wishing to join the room.
 	join chan *Client
@@ -12,7 +12,7 @@ type Emma struct {
 	clients map[*Client]bool
 }
 
-// Broadcast sent message to all clients in the room.
+// Broadcast sent message to all clients.
 func (e *Emma) Broadcast(msg []byte) error {
 	for client := range e.clients {
 		client.Send(msg)
@@ -20,7 +20,7 @@ func (e *Emma) Broadcast(msg []byte) error {
 	return nil
 }
 
-// BroadcastFilter sent message to clients in the room with filter.
+// BroadcastFilter sent message to clients with filter.
 func (e *Emma) BroadcastFilter(msg []byte, f func(client *Client) bool) error {
 	for client := range e.clients {
 		if f(client) {
@@ -32,7 +32,7 @@ func (e *Emma) BroadcastFilter(msg []byte, f func(client *Client) bool) error {
 
 }
 
-// BroadcastJSON sent JSON message to all clients in the room.
+// BroadcastJSON sent JSON message to all clients.
 func (e *Emma) BroadcastJSON(i interface{}) error {
 	msg, err := json.Marshal(i)
 	if err != nil {
@@ -42,7 +42,7 @@ func (e *Emma) BroadcastJSON(i interface{}) error {
 	return e.Broadcast(msg)
 }
 
-// BroadcastFilterJSON sent JSON message to clients in the room with filter.
+// BroadcastFilterJSON sent JSON message to clients with filter.
 func (e *Emma) BroadcastFilterJSON(i interface{}, f func(client *Client) bool) error {
 	msg, err := json.Marshal(i)
 	if err != nil {
