@@ -2,6 +2,7 @@ package emma
 
 import (
 	"net/http"
+	"sync"
 
 	"github.com/gorilla/websocket"
 )
@@ -16,11 +17,33 @@ type Client struct {
 	send chan []byte
 	// room is the room this client is chatting in.
 	Emma *Emma
+
+	mu     sync.Mutex
+	closed bool
 }
 
 // Send message to client.
 func (c *Client) Send(msg []byte) {
-	c.send <- msg
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		return
+	}
+	select {
+	case c.send <- msg:
+	default:
+		c.Socket.Close()
+	}
+}
+
+// close closes the client's send channel.
+func (c *Client) close() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.closed {
+		c.closed = true
+		close(c.send)
+	}
 }
 
 // Broadcast transmits a message to all clients except the sender.

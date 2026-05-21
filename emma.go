@@ -1,6 +1,9 @@
 package emma
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"sync"
+)
 
 // Emma allows you to manage clients connected to the WebSocket.
 type Emma struct {
@@ -10,10 +13,14 @@ type Emma struct {
 	leave chan *Client
 	// clients holds all current clients in this room.
 	clients map[*Client]bool
+	// mu protects clients map.
+	mu sync.RWMutex
 }
 
 // Broadcast sent message to all clients.
 func (e *Emma) Broadcast(msg []byte) error {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
 	for client := range e.clients {
 		client.Send(msg)
 	}
@@ -22,6 +29,8 @@ func (e *Emma) Broadcast(msg []byte) error {
 
 // BroadcastFilter sent message to clients with filter.
 func (e *Emma) BroadcastFilter(msg []byte, f func(client *Client) bool) error {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
 	for client := range e.clients {
 		if f(client) {
 			client.Send(msg)
@@ -29,7 +38,6 @@ func (e *Emma) BroadcastFilter(msg []byte, f func(client *Client) bool) error {
 	}
 
 	return nil
-
 }
 
 // BroadcastJSON sent JSON message to all clients.
@@ -58,11 +66,15 @@ func (e *Emma) Run() {
 		select {
 		case client := <-e.join:
 			// joining.
+			e.mu.Lock()
 			e.clients[client] = true
+			e.mu.Unlock()
 		case client := <-e.leave:
 			// leaving.
+			e.mu.Lock()
 			delete(e.clients, client)
-			close(client.send)
+			e.mu.Unlock()
+			client.close()
 		}
 	}
 }
