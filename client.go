@@ -3,6 +3,7 @@ package emma
 import (
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -17,6 +18,19 @@ type Client struct {
 	send chan []byte
 	// room is the room this client is chatting in.
 	Emma *Emma
+
+	// ReadLimit is the maximum message size allowed from the client.
+	// If <= 0, no limit is enforced (default Gorilla WebSocket behavior).
+	ReadLimit int64
+	// PingPeriod is the interval at which ping messages are sent to the peer.
+	// If <= 0, no pings are sent.
+	PingPeriod time.Duration
+	// WriteWait is the time allowed to write a message to the peer.
+	// If <= 0, no write deadline is set.
+	WriteWait time.Duration
+	// PongWait is the time allowed to read the next pong message from the peer.
+	// If <= 0, no read deadline is set.
+	PongWait time.Duration
 
 	mu     sync.Mutex
 	closed bool
@@ -64,6 +78,18 @@ func (c *Client) BroadcastJSON(i interface{}) {
 func (c *Client) Read(messageHandler func(c *Client, msg []byte)) {
 	defer c.Socket.Close()
 
+	if c.ReadLimit > 0 {
+		c.Socket.SetReadLimit(c.ReadLimit)
+	}
+
+	if c.PongWait > 0 {
+		c.Socket.SetReadDeadline(time.Now().Add(c.PongWait))
+		c.Socket.SetPongHandler(func(string) error {
+			c.Socket.SetReadDeadline(time.Now().Add(c.PongWait))
+			return nil
+		})
+	}
+
 	for {
 		_, msg, err := c.Socket.ReadMessage()
 		if err != nil {
@@ -76,12 +102,48 @@ func (c *Client) Read(messageHandler func(c *Client, msg []byte)) {
 
 // Write message to the socket.
 func (c *Client) Write() {
+	var ticker *time.Ticker
+	if c.PingPeriod > 0 {
+		ticker = time.NewTicker(c.PingPeriod)
+		defer ticker.Stop()
+	}
 	defer c.Socket.Close()
 
-	for msg := range c.send {
-		err := c.Socket.WriteMessage(websocket.TextMessage, msg)
-		if err != nil {
-			return
+	for {
+		if ticker != nil {
+			select {
+			case msg, ok := <-c.send:
+				if !ok {
+					c.Socket.WriteMessage(websocket.CloseMessage, []byte{})
+					return
+				}
+				if c.WriteWait > 0 {
+					c.Socket.SetWriteDeadline(time.Now().Add(c.WriteWait))
+				}
+				err := c.Socket.WriteMessage(websocket.TextMessage, msg)
+				if err != nil {
+					return
+				}
+			case <-ticker.C:
+				if c.WriteWait > 0 {
+					c.Socket.SetWriteDeadline(time.Now().Add(c.WriteWait))
+				}
+				if err := c.Socket.WriteMessage(websocket.PingMessage, nil); err != nil {
+					return
+				}
+			}
+		} else {
+			msg, ok := <-c.send
+			if !ok {
+				return
+			}
+			if c.WriteWait > 0 {
+				c.Socket.SetWriteDeadline(time.Now().Add(c.WriteWait))
+			}
+			err := c.Socket.WriteMessage(websocket.TextMessage, msg)
+			if err != nil {
+				return
+			}
 		}
 	}
 }

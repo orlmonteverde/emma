@@ -15,6 +15,10 @@ type Emma struct {
 	clients map[*Client]bool
 	// mu protects clients map.
 	mu sync.RWMutex
+	// quit is a channel to signal shutting down the room.
+	quit chan struct{}
+	// once ensures quit is closed only once.
+	once sync.Once
 }
 
 // Broadcast sent message to all clients.
@@ -62,6 +66,7 @@ func (e *Emma) BroadcastFilterJSON(i interface{}, f func(client *Client) bool) e
 
 // Run start the room.
 func (e *Emma) Run() {
+	quitChan := e.getQuitChan()
 	for {
 		select {
 		case client := <-e.join:
@@ -75,6 +80,14 @@ func (e *Emma) Run() {
 			delete(e.clients, client)
 			e.mu.Unlock()
 			client.close()
+		case <-quitChan:
+			e.mu.Lock()
+			for client := range e.clients {
+				delete(e.clients, client)
+				client.close()
+			}
+			e.mu.Unlock()
+			return
 		}
 	}
 }
@@ -96,5 +109,23 @@ func New() *Emma {
 		join:    make(chan *Client),
 		leave:   make(chan *Client),
 		clients: make(map[*Client]bool),
+		quit:    make(chan struct{}),
 	}
+}
+
+// getQuitChan lazily initializes and returns the quit channel.
+func (e *Emma) getQuitChan() chan struct{} {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.quit == nil {
+		e.quit = make(chan struct{})
+	}
+	return e.quit
+}
+
+// Close stops the room and disconnects all clients.
+func (e *Emma) Close() {
+	e.once.Do(func() {
+		close(e.getQuitChan())
+	})
 }

@@ -75,6 +75,9 @@ func main() {
 }
 ```
 
+> [!IMPORTANT]
+> **Production Security Note (CSWSH):** The example above uses `CheckOrigin: func(r *http.Request) bool { return true }` to disable origin checks for local development. In production, allowing any origin can make your application vulnerable to **Cross-Site WebSocket Hijacking (CSWSH)**. Always validate the `Origin` header against a whitelist of allowed domains in production environments.
+
 ### Example: [Chat](https://github.com/orlmonteverde/emma/blob/master/_examples/chat/)
 
 ![Chat](https://raw.githubusercontent.com/orlmonteverde/emma/master/_examples/chat/example.gif)
